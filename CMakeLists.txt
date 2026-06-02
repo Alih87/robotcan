@@ -19,8 +19,12 @@ ament_target_dependencies(test_can rclcpp)
 add_executable(robot_can src/robot_test.cpp)
 ament_target_dependencies(robot_can rclcpp)
 
+add_executable(robot_uart src/robot_test_uart.cpp)
+ament_target_dependencies(robot_uart rclcpp)
+
 target_link_libraries(test_can)
 target_link_libraries(robot_can)
+target_link_libraries(robot_uart)
 
 install(TARGETS
   test_can
@@ -28,6 +32,10 @@ install(TARGETS
 )
 install(TARGETS
   robot_can
+  DESTINATION lib/${PROJECT_NAME}
+)
+install(TARGETS
+  robot_uart
   DESTINATION lib/${PROJECT_NAME}
 )
 
