@@ -293,6 +293,21 @@ private:
       cmd.emergency_stop = this->get_parameter("emergency_stop").as_bool();
       cmd.tx_counter = tx_counter_++;
 
+      if (cmd.arm_left_open & cmd.arm_left_close) {
+        cmd.arm_left_open = false;
+        RCLCPP_WARN(this->get_logger(), "Left arm cannot be open and closed at the same time, arm is closed");
+      }
+
+      if (cmd.arm_right_open & cmd.arm_right_close) {
+        RCLCPP_WARN(this->get_logger(), "Right arm cannot be open and closed at the same time, arm is closed");
+        cmd.arm_right_open = false;
+      }
+
+      if (cmd.water_main_open & cmd.water_main_close) {
+        RCLCPP_WARN(this->get_logger(), "Water main cannot be open and closed at the same time, water main is closed");
+        cmd.water_main_open = false;
+      }
+
       const auto data = sprayer_can::build_drive_control_data(cmd);
       send_can_frame(sprayer_can::ID_HOST_DRIVE_CONTROL, data);
     } catch (const std::exception & e) {
