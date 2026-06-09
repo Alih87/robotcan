@@ -32,8 +32,8 @@ public:
     this->declare_parameter<int>("send_period_ms", 100);
 
     // Drive command parameters
-    this->declare_parameter<std::string>("mode", "D");       // D=Driving, W=Work
-    this->declare_parameter<std::string>("direction", "F");  // F=Forward, R=Reverse, S=Stop
+    this->declare_parameter<std::string>("mode", "W");       // D=Driving, W=Work
+    this->declare_parameter<std::string>("direction", "R");  // F=Forward, R=Reverse, S=Stop
     this->declare_parameter<int>("speed", 1);                // 0=Stop, 1=Low, 2=Middle, 3=High
     this->declare_parameter<int>("steering_angle_deg", 0);   // -45..45
 
