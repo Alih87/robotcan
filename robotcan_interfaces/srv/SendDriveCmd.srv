@@ -1,0 +1,15 @@
+string mode
+string direction
+uint8 speed
+int8 steering_angle_deg
+
+bool arm_left_open
+bool arm_left_close
+bool arm_right_open
+bool arm_right_close
+bool water_main_open
+bool water_main_close
+bool emergency_stop
+---
+bool success
+string message

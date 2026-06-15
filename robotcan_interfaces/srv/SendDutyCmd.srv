@@ -1,0 +1,4 @@
+uint8[8] duty_groups
+---
+bool success
+string message

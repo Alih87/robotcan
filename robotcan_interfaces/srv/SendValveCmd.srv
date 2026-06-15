@@ -1,0 +1,6 @@
+uint8[] valves_on
+uint8[] valves_off
+bool clear_previous_state
+---
+bool success
+string message

@@ -9,6 +9,7 @@ endif()
 include_directories(include)
 find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
+find_package(robotcan_interfaces REQUIRED)
 # uncomment the following section in order to fill in
 # further dependencies manually.
 # find_package(<dependency> REQUIRED)
@@ -18,6 +19,9 @@ ament_target_dependencies(test_can rclcpp)
 
 add_executable(robot_can src/robot_test.cpp)
 ament_target_dependencies(robot_can rclcpp)
+
+add_executable(robot_srv src/robot_srv.cpp)
+ament_target_dependencies(robot_srv rclcpp robotcan_interfaces)
 
 add_executable(robot_uart src/robot_test_uart.cpp)
 ament_target_dependencies(robot_uart rclcpp)
