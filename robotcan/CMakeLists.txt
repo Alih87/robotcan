@@ -11,6 +11,7 @@ find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(robotcan_interfaces REQUIRED)
 find_package(geometry_msgs REQUIRED)
+find_package(nav_msgs REQUIRED)
 # uncomment the following section in order to fill in
 # further dependencies manually.
 # find_package(<dependency> REQUIRED)
@@ -21,16 +22,20 @@ ament_target_dependencies(test_can rclcpp)
 add_executable(robot_can src/robot_test.cpp)
 ament_target_dependencies(robot_can rclcpp)
 
-add_executable(robot_srv src/robot_srv.cpp)
-ament_target_dependencies(robot_srv rclcpp robotcan_interfaces geometry_msgs)
-
 add_executable(robot_uart src/robot_test_uart.cpp)
 ament_target_dependencies(robot_uart rclcpp)
+
+add_executable(robot_srv src/robot_srv.cpp)
+ament_target_dependencies(robot_srv rclcpp robotcan_interfaces)
+
+add_executable(robot_pub src/robot_pub.cpp)
+ament_target_dependencies(robot_pub rclcpp robotcan_interfaces geometry_msgs)
 
 target_link_libraries(test_can)
 target_link_libraries(robot_can)
 target_link_libraries(robot_uart)
 target_link_libraries(robot_srv)
+target_link_libraries(robot_pub)
 
 install(TARGETS
   test_can
@@ -46,6 +51,10 @@ install(TARGETS
 )
 install(TARGETS
   robot_srv
+  DESTINATION lib/${PROJECT_NAME}
+)
+install(TARGETS
+  robot_pub
   DESTINATION lib/${PROJECT_NAME}
 )
 

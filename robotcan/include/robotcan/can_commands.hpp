@@ -289,4 +289,15 @@ inline std::string speed_to_string(DriveSpeed speed)
   }
 }
 
+inline float speed_to_value(DriveSpeed speed)
+{
+  switch (speed) {
+    case DriveSpeed::Stop:    return 0.0;
+    case DriveSpeed::Low:     return 0.11;
+    case DriveSpeed::Middle:  return 0.22;
+    case DriveSpeed::High:    return 0.33;
+    default:                  return -1;
+  }
+}
+
 }  // namespace sprayer_can

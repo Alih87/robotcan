@@ -7,7 +7,7 @@ from launch_ros.actions import Node
 def generate_launch_description():
     can_port_arg = DeclareLaunchArgument(
         "can_port",
-        default_value="can1",
+        default_value="vcan0",
         description="CAN interface name: vcan0 for testing, can0 for real CAN"
     )
 
