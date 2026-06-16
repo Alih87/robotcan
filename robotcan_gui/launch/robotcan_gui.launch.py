@@ -20,6 +20,7 @@ def generate_launch_description():
             {
                 "can_port": LaunchConfiguration("can_port"),
                 "read_period_ms": 50,
+                "reverse_delay_ms": 1500
             }
         ],
     )

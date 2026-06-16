@@ -7,6 +7,7 @@
 #include <unistd.h>
 #include <fcntl.h>
 
+#include <thread>
 #include <cerrno>
 #include <chrono>
 #include <cstring>
@@ -33,12 +34,18 @@ public:
   {
     this->declare_parameter<std::string>("can_port", "can0");
     this->declare_parameter<int>("read_period_ms", 50);
+    this->declare_parameter<int>("reverse_delay_ms", 1500);
 
     can_port_ = this->get_parameter("can_port").as_string();
+    reverse_delay_ms_ = this->get_parameter("reverse_delay_ms").as_int();
     const int read_period_ms = this->get_parameter("read_period_ms").as_int();
 
     if (read_period_ms <= 0) {
       throw std::runtime_error("read_period_ms must be greater than 0");
+    }
+
+    if (reverse_delay_ms_ < 0) {
+      throw std::runtime_error("reverse_delay_ms must be >= 0");
     }
 
     open_can_socket();
@@ -92,6 +99,9 @@ private:
 
   std::uint8_t tx_counter_{0};
   std::uint32_t current_valve_mask_{0u};
+
+  sprayer_can::DriveDirection last_direction_{sprayer_can::DriveDirection::Stop};
+  int reverse_delay_ms_{500};
 
   rclcpp::TimerBase::SharedPtr read_timer_;
 
@@ -214,14 +224,84 @@ private:
       return;
     }
 
+    const bool reversing_direction =
+      is_direction_reversal(last_direction_, cmd.direction);
+
+    if (cmd.emergency_stop) {
+      cmd.direction = sprayer_can::DriveDirection::Stop;
+      cmd.speed = sprayer_can::DriveSpeed::Stop;
+      cmd.tx_counter = tx_counter_++;
+
+      const auto data = sprayer_can::build_drive_control_data(cmd);
+      const bool ok = send_can_frame(sprayer_can::ID_HOST_DRIVE_CONTROL, data);
+
+      if (ok) {
+        last_direction_ = sprayer_can::DriveDirection::Stop;
+      }
+
+      response->success = ok;
+      response->message = ok ? "Emergency stop command sent." :
+                                "Failed to send emergency stop command.";
+      return;
+    }
+
+    if (reversing_direction) {
+      const bool stop_ok = send_stop_before_reverse(cmd);
+
+      if (!stop_ok) {
+        response->success = false;
+        response->message = "Failed to send STOP command before reversing.";
+        return;
+      }
+
+      std::this_thread::sleep_for(std::chrono::milliseconds(reverse_delay_ms_));
+    }
+
     cmd.tx_counter = tx_counter_++;
 
     const auto data = sprayer_can::build_drive_control_data(cmd);
     const bool ok = send_can_frame(sprayer_can::ID_HOST_DRIVE_CONTROL, data);
 
+    if (ok) {
+      last_direction_ = cmd.direction;
+    }
+
     response->success = ok;
     response->message = ok ? "Drive command sent on CAN ID 0x101." :
-                             "Failed to send drive CAN frame.";
+                            "Failed to send drive CAN frame.";
+  }
+
+  bool is_direction_reversal(
+    sprayer_can::DriveDirection previous,
+    sprayer_can::DriveDirection requested) {
+      return
+        (previous == sprayer_can::DriveDirection::Forward &&
+        requested == sprayer_can::DriveDirection::Reverse) ||
+        (previous == sprayer_can::DriveDirection::Reverse &&
+        requested == sprayer_can::DriveDirection::Forward);
+  }
+
+  bool send_stop_before_reverse(const sprayer_can::DriveControlCommand & original_cmd) {
+    sprayer_can::DriveControlCommand stop_cmd = original_cmd;
+
+    stop_cmd.direction = sprayer_can::DriveDirection::Stop;
+    stop_cmd.speed = sprayer_can::DriveSpeed::Stop;
+    stop_cmd.tx_counter = tx_counter_++;
+
+    const auto stop_data = sprayer_can::build_drive_control_data(stop_cmd);
+
+    RCLCPP_WARN(
+      this->get_logger(),
+      "Direction reversal requested. Sending STOP before reverse."
+    );
+
+    const bool ok = send_can_frame(sprayer_can::ID_HOST_DRIVE_CONTROL, stop_data);
+
+    if (ok) {
+      last_direction_ = sprayer_can::DriveDirection::Stop;
+    }
+
+    return ok;
   }
 
   void handle_valve_cmd(
