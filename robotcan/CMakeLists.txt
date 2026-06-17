@@ -12,12 +12,10 @@ find_package(rclcpp REQUIRED)
 find_package(robotcan_interfaces REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(nav_msgs REQUIRED)
+find_package(sensor_msgs REQUIRED)
 # uncomment the following section in order to fill in
 # further dependencies manually.
 # find_package(<dependency> REQUIRED)
-
-add_executable(test_can src/test.cpp)
-ament_target_dependencies(test_can rclcpp)
 
 add_executable(robot_can src/robot_test.cpp)
 ament_target_dependencies(robot_can rclcpp)
@@ -31,16 +29,15 @@ ament_target_dependencies(robot_srv rclcpp robotcan_interfaces)
 add_executable(robot_pub src/robot_pub.cpp)
 ament_target_dependencies(robot_pub rclcpp robotcan_interfaces geometry_msgs)
 
-target_link_libraries(test_can)
+add_executable(robot_odom src/robot_odom.cpp)
+ament_target_dependencies(robot_odom rclcpp geometry_msgs nav_msgs sensor_msgs)
+
 target_link_libraries(robot_can)
 target_link_libraries(robot_uart)
 target_link_libraries(robot_srv)
 target_link_libraries(robot_pub)
+target_link_libraries(robot_odom)
 
-install(TARGETS
-  test_can
-  DESTINATION lib/${PROJECT_NAME}
-)
 install(TARGETS
   robot_can
   DESTINATION lib/${PROJECT_NAME}
@@ -56,6 +53,14 @@ install(TARGETS
 install(TARGETS
   robot_pub
   DESTINATION lib/${PROJECT_NAME}
+)
+install(TARGETS
+  robot_odom
+  DESTINATION lib/${PROJECT_NAME}
+)
+install(DIRECTORY
+  launch
+  DESTINATION share/${PROJECT_NAME}
 )
 
 if(BUILD_TESTING)
