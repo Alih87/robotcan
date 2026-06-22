@@ -7,6 +7,7 @@
 #include <unistd.h>
 #include <fcntl.h>
 
+#include <cmath>
 #include <cerrno>
 #include <chrono>
 #include <cstring>
@@ -29,11 +30,11 @@ public:
   {
     this->declare_parameter<std::string>("can_port", "can0");
     this->declare_parameter<double>("publish_rate_hz", 20.0);
-    this->declare_parameter<double>("steering_gain", 0.02);
+    this->declare_parameter<double>("wheel_base_m", 0.8);
 
     can_port_ = this->get_parameter("can_port").as_string();
     publish_rate_hz_ = this->get_parameter("publish_rate_hz").as_double();
-    steering_gain_ = this->get_parameter("steering_gain").as_double();
+    wheel_base_m = this->get_parameter("wheel_base_m").as_double();
 
     if (publish_rate_hz_ <= 0.0) {
       throw std::runtime_error("publish_rate_hz must be greater than 0");
@@ -41,8 +42,7 @@ public:
 
     open_can_socket();
 
-    cmd_vel_pub_ =
-      this->create_publisher<geometry_msgs::msg::Twist>("/cmd_vel_feedback", 10);
+    cmd_vel_pub_ = this->create_publisher<geometry_msgs::msg::Twist>("/cmd_vel_feedback", 10);
 
     const auto period =
       std::chrono::duration_cast<std::chrono::milliseconds>(
@@ -71,7 +71,7 @@ private:
   int socket_fd_{-1};
   std::string can_port_;
   double publish_rate_hz_{20.0};
-  double steering_gain_{0.02};
+  double wheel_base_m{0.8};
 
   rclcpp::TimerBase::SharedPtr read_timer_;
   rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr cmd_vel_pub_;
@@ -197,8 +197,12 @@ private:
       linear_x = 0.0;
     }
 
-    const double steering_deg = static_cast<double>(status.steering_angle_deg);
-    const double angular_z = steering_deg * steering_gain_;
+    const double steering_rad = static_cast<double>(status.steering_angle_deg) * M_PI / 180.0;
+    double angular_z = 0.0;
+
+    if (std::abs(wheel_base_m) > 1e-6) {
+      angular_z = (linear_x / wheel_base_m) * std::tan(steering_rad);
+    }
 
     twist_msg.linear.x = linear_x;
     twist_msg.angular.z = angular_z;
