@@ -151,13 +151,13 @@ private:
     return angle;
   }
 
-  double apply_deadband_and_scale(double v_cmd)
+  double apply_deadband_and_scale(double v_cmd, double yaw_)
   {
     if (std::abs(v_cmd) < deadband_) {
       return 0.0;
     }
 
-    return velocity_scale_ * v_cmd;
+    return velocity_scale_ * std::cos(yaw_) * v_cmd;
   }
 
   // -----------------------------
@@ -174,9 +174,22 @@ private:
     }
 
     // -----------------------------
-    // 1. Target steady-state velocity
+    // 1. Yaw update
+    // Prefer IMU yaw rate for local odometry
     // -----------------------------
-    const double v_target = apply_deadband_and_scale(cmd_linear_x_);
+    double yaw_rate = cmd_angular_z_;
+
+    if (use_imu_yaw_rate_ && received_imu_) {
+      yaw_rate = imu_yaw_rate_z_;
+    }
+
+    yaw_ = yaw_ + yaw_rate * dt;
+    yaw_ = normalize_angle(yaw_);
+
+    // -----------------------------
+    // 2. Target steady-state velocity
+    // -----------------------------
+    const double v_target = apply_deadband_and_scale(cmd_linear_x_, yaw_);
 
     // -----------------------------
     // 2. Select acceleration/deceleration time constant
@@ -199,26 +212,13 @@ private:
     v_eff_ = v_eff_ + alpha * (v_target - v_eff_);
 
     // -----------------------------
-    // 4. Yaw update
-    // Prefer IMU yaw rate for local odometry
-    // -----------------------------
-    double yaw_rate = cmd_angular_z_;
-
-    if (use_imu_yaw_rate_ && received_imu_) {
-      yaw_rate = imu_yaw_rate_z_;
-    }
-
-    yaw_ = yaw_ + yaw_rate * dt;
-    yaw_ = normalize_angle(yaw_);
-
-    // -----------------------------
-    // 5. Position integration
+    // 4. Position integration
     // -----------------------------
     x_ = x_ + v_eff_ * std::cos(yaw_) * dt;
     y_ = y_ + v_eff_ * std::sin(yaw_) * dt;
 
     // -----------------------------
-    // 6. Publish odometry
+    // 5. Publish odometry
     // -----------------------------
     nav_msgs::msg::Odometry odom_msg;
 
@@ -241,7 +241,7 @@ private:
     odom_msg.twist.twist.angular.z = yaw_rate;
 
     // -----------------------------
-    // 7. Covariances
+    // 6. Covariances
     // Important for robot_localization
     // Since this is open-loop odometry, pose covariance should not be too small.
     // Twist.linear.x is more useful than x/y pose.
