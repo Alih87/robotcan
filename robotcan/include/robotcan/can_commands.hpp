@@ -14,6 +14,7 @@ using CanData = std::array<std::uint8_t, 8>;
 constexpr std::uint32_t ID_HOST_DRIVE_CONTROL        = 0x101;
 constexpr std::uint32_t ID_HOST_SPRAY_VALVE_COMMAND = 0x102;
 constexpr std::uint32_t ID_HOST_SPRAY_DUTY_COMMAND  = 0x103;
+constexpr std::uint32_t ID_HOST_GPS_MOTION = 0x104;
 
 constexpr std::uint32_t ID_CONTROLLER_DRIVE_STATUS        = 0x201;
 constexpr std::uint32_t ID_CONTROLLER_SPRAY_VALVE_STATUS  = 0x202;
@@ -88,6 +89,84 @@ struct DriveStatus
   std::uint8_t alarm = 0;
   std::uint8_t rx_counter = 0;
 };
+
+struct GpsMotionPacket
+{
+  std::uint32_t gps_itow_ms = 0;      // GPS time of week [ms]
+  std::uint16_t speed_cmps = 0;       // ground speed [cm/s]
+  std::uint16_t heading_cdeg = 0;     // heading [0.01 deg], 0..35999
+};
+
+inline std::uint16_t clamp_heading_cdeg(std::int64_t heading_cdeg)
+{
+  heading_cdeg %= 36000;
+
+  if (heading_cdeg < 0) {
+    heading_cdeg += 36000;
+  }
+
+  return static_cast<std::uint16_t>(heading_cdeg);
+}
+
+inline std::uint16_t clamp_u16(std::int64_t value)
+{
+  if (value < 0) {
+    return 0;
+  }
+
+  if (value > 65535) {
+    return 65535;
+  }
+
+  return static_cast<std::uint16_t>(value);
+}
+
+inline CanData build_gps_motion_data(const GpsMotionPacket & gps)
+{
+  CanData data{};
+
+  // Byte 0-3: uint32 iTOW little-endian
+  data[0] = static_cast<std::uint8_t>((gps.gps_itow_ms >> 0) & 0xFF);
+  data[1] = static_cast<std::uint8_t>((gps.gps_itow_ms >> 8) & 0xFF);
+  data[2] = static_cast<std::uint8_t>((gps.gps_itow_ms >> 16) & 0xFF);
+  data[3] = static_cast<std::uint8_t>((gps.gps_itow_ms >> 24) & 0xFF);
+
+  // Byte 4-5: uint16 speed cm/s little-endian
+  data[4] = static_cast<std::uint8_t>((gps.speed_cmps >> 0) & 0xFF);
+  data[5] = static_cast<std::uint8_t>((gps.speed_cmps >> 8) & 0xFF);
+
+  // Byte 6-7: uint16 heading centidegree little-endian
+  data[6] = static_cast<std::uint8_t>((gps.heading_cdeg >> 0) & 0xFF);
+  data[7] = static_cast<std::uint8_t>((gps.heading_cdeg >> 8) & 0xFF);
+
+  return data;
+}
+
+inline GpsMotionPacket parse_gps_motion_data(const CanData & data)
+{
+  GpsMotionPacket gps;
+
+  gps.gps_itow_ms =
+    (static_cast<std::uint32_t>(data[0]) << 0) |
+    (static_cast<std::uint32_t>(data[1]) << 8) |
+    (static_cast<std::uint32_t>(data[2]) << 16) |
+    (static_cast<std::uint32_t>(data[3]) << 24);
+
+  gps.speed_cmps =
+    (static_cast<std::uint16_t>(data[4]) << 0) |
+    (static_cast<std::uint16_t>(data[5]) << 8);
+
+  gps.heading_cdeg =
+    (static_cast<std::uint16_t>(data[6]) << 0) |
+    (static_cast<std::uint16_t>(data[7]) << 8);
+
+  return gps;
+}
+
+inline GpsMotionPacket parse_gps_motion_data(const std::uint8_t raw[8])
+{
+  return parse_gps_motion_data(make_can_data_from_raw(raw));
+}
 
 inline CanData make_can_data_from_raw(const std::uint8_t raw[8])
 {
