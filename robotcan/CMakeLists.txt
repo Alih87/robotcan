@@ -14,6 +14,7 @@ find_package(geometry_msgs REQUIRED)
 find_package(nav_msgs REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package(ublox_msgs REQUIRED)
+find_package(std_msgs REQUIRED)
 # uncomment the following section in order to fill in
 # further dependencies manually.
 # find_package(<dependency> REQUIRED)
@@ -25,7 +26,7 @@ add_executable(robot_uart src/robot_test_uart.cpp)
 ament_target_dependencies(robot_uart rclcpp)
 
 add_executable(robot_srv src/robot_srv.cpp)
-ament_target_dependencies(robot_srv rclcpp robotcan_interfaces)
+ament_target_dependencies(robot_srv rclcpp std_msgs robotcan_interfaces)
 
 add_executable(robot_pub src/robot_pub.cpp)
 ament_target_dependencies(robot_pub rclcpp robotcan_interfaces geometry_msgs)
@@ -33,7 +34,7 @@ ament_target_dependencies(robot_pub rclcpp robotcan_interfaces geometry_msgs)
 add_executable(robot_odom src/robot_odom.cpp)
 ament_target_dependencies(robot_odom rclcpp geometry_msgs nav_msgs sensor_msgs)
 add_executable(gps_can_tx src/gps_can_tx.cpp)
-ament_target_dependencies(gps_can_tx rclcpp ublox_msgs)
+ament_target_dependencies(gps_can_tx rclcpp std_msgs ublox_msgs)
 
 target_link_libraries(robot_can)
 target_link_libraries(robot_uart)

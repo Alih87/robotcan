@@ -7,6 +7,7 @@
 #include <unistd.h>
 #include <fcntl.h>
 
+#include <std_msgs/msg/u_int8.hpp>
 #include <thread>
 #include <cerrno>
 #include <chrono>
@@ -75,6 +76,9 @@ public:
           std::placeholders::_1,
           std::placeholders::_2));
 
+    drive_direction_pub_ =
+      this->create_publisher<std_msgs::msg::UInt8>("/robotcan/drive_direction", 10);
+
     read_timer_ = this->create_wall_timer(
       std::chrono::milliseconds(read_period_ms),
       std::bind(&CanNode::read_feedback_frames, this));
@@ -106,6 +110,7 @@ private:
   rclcpp::Service<robotcan_interfaces::srv::SendDriveCmd>::SharedPtr drive_cmd_service_;
   rclcpp::Service<robotcan_interfaces::srv::SendValveCmd>::SharedPtr valve_cmd_service_;
   rclcpp::Service<robotcan_interfaces::srv::SendDutyCmd>::SharedPtr duty_cmd_service_;
+  rclcpp::Publisher<std_msgs::msg::UInt8>::SharedPtr drive_direction_pub_;
 
   void open_can_socket()
   {
@@ -151,6 +156,26 @@ private:
       socket_fd_ = -1;
       throw std::runtime_error("fcntl(F_SETFL, O_NONBLOCK) failed");
     }
+  }
+
+  std::uint8_t drive_direction_to_gps_direction(
+    sprayer_can::DriveDirection direction,
+    sprayer_can::DriveSpeed speed)
+  {
+    if (direction == sprayer_can::DriveDirection::Stop ||
+        speed == sprayer_can::DriveSpeed::Stop) {
+      return 0;  // stop
+    }
+
+    if (direction == sprayer_can::DriveDirection::Forward) {
+      return 1;  // forward
+    }
+
+    if (direction == sprayer_can::DriveDirection::Reverse) {
+      return 2;  // backward
+    }
+
+    return 0;
   }
 
   bool send_can_frame(std::uint32_t can_id, const sprayer_can::CanData & data)
@@ -235,6 +260,9 @@ private:
 
       if (ok) {
         last_direction_ = sprayer_can::DriveDirection::Stop;
+        std_msgs::msg::UInt8 dir_msg;
+        dir_msg.data = drive_direction_to_gps_direction(cmd.direction, cmd.speed);
+        drive_direction_pub_->publish(dir_msg);
       }
 
       response->success = ok;

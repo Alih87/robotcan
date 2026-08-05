@@ -17,7 +17,7 @@
 #include <memory>
 #include <stdexcept>
 #include <string>
-
+#include "std_msgs/msg/u_int8.hpp"
 #include "rclcpp/rclcpp.hpp"
 
 #include "ublox_msgs/msg/nav_pvt.hpp"
@@ -37,16 +37,22 @@ public:
 
     // With ublox node namespace "rover", these usually become:
     // /rover/navpvt and /rover/navrelposned
-    this->declare_parameter<std::string>("navpvt_topic", "/rover/navpvt");
-    this->declare_parameter<std::string>("navrelposned_topic", "/rover/navrelposned");
+    this->declare_parameter<std::string>("navpvt_topic", "/robot_gps_node/navpvt");
+    this->declare_parameter<std::string>("navrelposned_topic", "/navrelposned");
 
     this->declare_parameter<bool>("require_moving_base_heading_valid", true);
+
+    this->declare_parameter<std::string>(
+      "drive_direction_topic",
+      "/robotcan/drive_direction");
 
     can_port_ = this->get_parameter("can_port").as_string();
     navpvt_topic_ = this->get_parameter("navpvt_topic").as_string();
     navrelposned_topic_ = this->get_parameter("navrelposned_topic").as_string();
     require_moving_base_heading_valid_ =
       this->get_parameter("require_moving_base_heading_valid").as_bool();
+    drive_direction_topic_ =
+      this->get_parameter("drive_direction_topic").as_string();
 
     open_can_socket();
 
@@ -61,6 +67,12 @@ public:
         navrelposned_topic_,
         10,
         std::bind(&GpsCanTx::navrelposned_callback, this, _1));
+
+    drive_direction_sub_ =
+      this->create_subscription<std_msgs::msg::UInt8>(
+        drive_direction_topic_,
+        10,
+        std::bind(&GpsCanTx::drive_direction_callback, this, std::placeholders::_1));
 
     RCLCPP_INFO(
       this->get_logger(),
@@ -87,9 +99,14 @@ private:
   std::string navpvt_topic_;
   std::string navrelposned_topic_;
   bool require_moving_base_heading_valid_{true};
+  std::string drive_direction_topic_;
 
   rclcpp::Subscription<ublox_msgs::msg::NavPVT>::SharedPtr navpvt_sub_;
   rclcpp::Subscription<ublox_msgs::msg::NavRELPOSNED9>::SharedPtr navrelposned_sub_;
+  rclcpp::Subscription<std_msgs::msg::UInt8>::SharedPtr drive_direction_sub_;
+
+  std::uint8_t latest_drive_direction_{0};
+  bool have_drive_direction_{false};
 
   bool have_heading_{false};
   std::uint16_t latest_heading_cdeg_{0};
@@ -204,31 +221,52 @@ private:
     have_heading_ = true;
   }
 
-  void navpvt_callback(const ublox_msgs::msg::NavPVT::SharedPtr msg)
+  void drive_direction_callback(const std_msgs::msg::UInt8::SharedPtr msg)
   {
-    if (!have_heading_) {
-      RCLCPP_WARN_THROTTLE(
+    if (msg->data > 2) {
+      RCLCPP_WARN(
         this->get_logger(),
-        *this->get_clock(),
-        2000,
-        "No valid moving-base heading yet; not sending GPS CAN packet.");
+        "Invalid drive direction received: %u. Expected 0=stop, 1=forward, 2=backward.",
+        static_cast<unsigned int>(msg->data));
       return;
     }
 
-    sprayer_can::GpsMotionPacket gps;
-
-    gps.gps_itow_ms = msg->i_tow;
-
-    // NavPVT g_speed is ground speed in mm/s in u-blox NAV-PVT.
-    // Convert mm/s to cm/s by dividing by 10.
-    gps.speed_cmps =
-      sprayer_can::clamp_u16(static_cast<std::int64_t>(msg->g_speed) / 10);
-
-    gps.heading_cdeg = latest_heading_cdeg_;
-
-    const auto data = sprayer_can::build_gps_motion_data(gps);
-    send_can_frame(sprayer_can::ID_HOST_GPS_MOTION, data);
+    latest_drive_direction_ = msg->data;
+    have_drive_direction_ = true;
   }
+
+  void navpvt_callback(const ublox_msgs::msg::NavPVT::SharedPtr msg)
+{
+  if (!have_heading_) {
+    return;
+  }
+
+  sprayer_can::GpsMotionPacket gps;
+
+  gps.gps_itow_ms = msg->i_tow;
+
+  const std::int32_t g_speed_mmps = msg->g_speed;
+
+  // g_speed: mm/s -> cm/s
+  gps.speed_cmps =
+    sprayer_can::clamp_u8(std::abs(g_speed_mmps) / 10);
+
+  // Do NOT trust NavPVT alone for reverse.
+  // Use latest drive direction if available.
+  if (gps.speed_cmps == 0) {
+    gps.direction = 0;  // stop
+  } else if (have_drive_direction_) {
+    gps.direction = latest_drive_direction_;
+  } else {
+    gps.direction = 1;  // fallback forward
+  }
+
+  // From NavRELPOSNED9 callback
+  gps.heading_cdeg = latest_heading_cdeg_;
+
+  const auto data = sprayer_can::build_gps_motion_data(gps);
+  send_can_frame(sprayer_can::ID_HOST_GPS_MOTION, data);
+}
 
   void print_tx_frame(std::uint32_t can_id, const sprayer_can::CanData & data)
   {
