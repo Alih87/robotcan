@@ -97,29 +97,11 @@ struct DriveStatus
 // Byte 6-7: heading [0.01 deg], uint16 little-endian
 struct GpsMotionPacket
 {
-  std::uint32_t gps_itow_ms = 0;
-  std::uint8_t direction = 0;
-  std::uint8_t speed_cmps = 0;
-  std::uint16_t heading_cdeg = 0;
+  std::uint8_t path_number = 0;       // Byte 0
+  std::uint8_t home_position = 0;     // Byte 1: 0 or 1
+  std::uint8_t direction = 0;         // Byte 2: 0 stop, 1 forward, 2 backward
+  std::uint64_t distance_cm = 0;      // Byte 3-7: uint40 cm
 };
-
-inline CanData make_can_data_from_raw(const std::uint8_t raw[8])
-{
-  CanData data{};
-
-  for (std::size_t i = 0; i < data.size(); ++i) {
-    data[i] = raw[i];
-  }
-
-  return data;
-}
-
-inline void copy_can_data_to_raw(const CanData & src, std::uint8_t dst[8])
-{
-  for (std::size_t i = 0; i < src.size(); ++i) {
-    dst[i] = src[i];
-  }
-}
 
 inline std::uint8_t clamp_u8(std::int64_t value)
 {
@@ -147,6 +129,30 @@ inline std::uint8_t clamp_gps_direction(std::int64_t direction)
   return 2;
 }
 
+inline std::uint64_t clamp_distance_cm_u40(std::uint64_t distance_cm)
+{
+  constexpr std::uint64_t max_u40 = 0xFFFFFFFFFFULL;
+
+  if (distance_cm > max_u40) {
+    return max_u40;
+  }
+
+  return distance_cm;
+}
+
+inline std::uint16_t clamp_u16(std::int64_t value)
+{
+  if (value < 0) {
+    return 0;
+  }
+
+  if (value > 65535) {
+    return 65535;
+  }
+
+  return static_cast<std::uint16_t>(value);
+}
+
 inline std::uint16_t clamp_heading_cdeg(std::int64_t heading_cdeg)
 {
   heading_cdeg %= 36000;
@@ -156,6 +162,24 @@ inline std::uint16_t clamp_heading_cdeg(std::int64_t heading_cdeg)
   }
 
   return static_cast<std::uint16_t>(heading_cdeg);
+}
+
+inline CanData make_can_data_from_raw(const std::uint8_t raw[8])
+{
+  CanData data{};
+
+  for (std::size_t i = 0; i < data.size(); ++i) {
+    data[i] = raw[i];
+  }
+
+  return data;
+}
+
+inline void copy_can_data_to_raw(const CanData & src, std::uint8_t dst[8])
+{
+  for (std::size_t i = 0; i < src.size(); ++i) {
+    dst[i] = src[i];
+  }
 }
 
 inline std::uint8_t make_control_flags(const DriveControlCommand & cmd)
@@ -247,41 +271,37 @@ inline CanData build_gps_motion_data(const GpsMotionPacket & gps)
 {
   CanData data{};
 
-  // Byte 0-3: uint32 iTOW little-endian
-  data[0] = static_cast<std::uint8_t>((gps.gps_itow_ms >> 0) & 0xFF);
-  data[1] = static_cast<std::uint8_t>((gps.gps_itow_ms >> 8) & 0xFF);
-  data[2] = static_cast<std::uint8_t>((gps.gps_itow_ms >> 16) & 0xFF);
-  data[3] = static_cast<std::uint8_t>((gps.gps_itow_ms >> 24) & 0xFF);
+  const std::uint64_t distance_cm =
+    clamp_distance_cm_u40(gps.distance_cm);
 
-  // Byte 4: direction, 0=stop, 1=forward, 2=backward
-  data[4] = clamp_gps_direction(gps.direction);
+  data[0] = gps.path_number;
+  data[1] = gps.home_position ? 1 : 0;
+  data[2] = clamp_gps_direction(gps.direction);
 
-  // Byte 5: speed cm/s
-  data[5] = gps.speed_cmps;
-
-  // Byte 6-7: uint16 heading centidegree little-endian
-  data[6] = static_cast<std::uint8_t>((gps.heading_cdeg >> 0) & 0xFF);
-  data[7] = static_cast<std::uint8_t>((gps.heading_cdeg >> 8) & 0xFF);
+  // Byte 3-7: distance from home in cm, uint40 little-endian
+  data[3] = static_cast<std::uint8_t>((distance_cm >> 0) & 0xFF);
+  data[4] = static_cast<std::uint8_t>((distance_cm >> 8) & 0xFF);
+  data[5] = static_cast<std::uint8_t>((distance_cm >> 16) & 0xFF);
+  data[6] = static_cast<std::uint8_t>((distance_cm >> 24) & 0xFF);
+  data[7] = static_cast<std::uint8_t>((distance_cm >> 32) & 0xFF);
 
   return data;
 }
 
 inline GpsMotionPacket parse_gps_motion_data(const CanData & data)
 {
-  GpsMotionPacket gps;
+  GpsMotionPacket gps{};
 
-  gps.gps_itow_ms =
-    (static_cast<std::uint32_t>(data[0]) << 0) |
-    (static_cast<std::uint32_t>(data[1]) << 8) |
-    (static_cast<std::uint32_t>(data[2]) << 16) |
-    (static_cast<std::uint32_t>(data[3]) << 24);
+  gps.path_number = data[0];
+  gps.home_position = data[1] ? 1 : 0;
+  gps.direction = data[2];
 
-  gps.direction = data[4];
-  gps.speed_cmps = data[5];
-
-  gps.heading_cdeg =
-    (static_cast<std::uint16_t>(data[6]) << 0) |
-    (static_cast<std::uint16_t>(data[7]) << 8);
+  gps.distance_cm =
+    (static_cast<std::uint64_t>(data[3]) << 0) |
+    (static_cast<std::uint64_t>(data[4]) << 8) |
+    (static_cast<std::uint64_t>(data[5]) << 16) |
+    (static_cast<std::uint64_t>(data[6]) << 24) |
+    (static_cast<std::uint64_t>(data[7]) << 32);
 
   return gps;
 }

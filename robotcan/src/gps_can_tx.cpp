@@ -41,19 +41,22 @@ public:
     this->declare_parameter<std::string>("navrelposned_topic", "/navrelposned");
 
     this->declare_parameter<bool>("require_moving_base_heading_valid", true);
-
-    this->declare_parameter<std::string>(
-      "drive_direction_topic",
-      "/robotcan/drive_direction");
+    this->declare_parameter<std::string>("drive_direction_topic", "/robotcan/drive_direction");
+	this->declare_parameter<std::string>("path_number_topic", "/robotcan/path_number");
+	this->declare_parameter<double>("home_radius_m", 0.5);
 
     can_port_ = this->get_parameter("can_port").as_string();
     navpvt_topic_ = this->get_parameter("navpvt_topic").as_string();
     navrelposned_topic_ = this->get_parameter("navrelposned_topic").as_string();
-    require_moving_base_heading_valid_ =
-      this->get_parameter("require_moving_base_heading_valid").as_bool();
-    drive_direction_topic_ =
-      this->get_parameter("drive_direction_topic").as_string();
+    require_moving_base_heading_valid_ = this->get_parameter("require_moving_base_heading_valid").as_bool();
+    drive_direction_topic_ = this->get_parameter("drive_direction_topic").as_string();
+	path_number_topic_ = this->get_parameter("path_number_topic").as_string();
+	home_radius_m_ = this->get_parameter("home_radius_m").as_double();
 
+	if (home_radius_m_ < 0.0) {
+	  throw std::runtime_error("home_radius_m must be >= 0");
+	}
+	
     open_can_socket();
 
     navpvt_sub_ =
@@ -73,6 +76,12 @@ public:
         drive_direction_topic_,
         10,
         std::bind(&GpsCanTx::drive_direction_callback, this, std::placeholders::_1));
+
+	path_number_sub_ =
+	  this->create_subscription<std_msgs::msg::UInt8>(
+		path_number_topic_,
+		10,
+		std::bind(&GpsCanTx::path_number_callback, this, std::placeholders::_1));
 
     RCLCPP_INFO(
       this->get_logger(),
@@ -100,12 +109,22 @@ private:
   std::string navrelposned_topic_;
   bool require_moving_base_heading_valid_{true};
   std::string drive_direction_topic_;
+  std::uint8_t gps_tx_counter_{0};
+  std::string path_number_topic_;
+
+  std::uint8_t latest_drive_direction_{0};  // 0 stop, 1 forward, 2 backward
+  std::uint8_t latest_path_number_{0};      // 0..3
+  bool have_home_{false};
+  double home_lat_rad_{0.0};
+  double home_lon_rad_{0.0};
+
+  double home_radius_m_{0.5};
 
   rclcpp::Subscription<ublox_msgs::msg::NavPVT>::SharedPtr navpvt_sub_;
   rclcpp::Subscription<ublox_msgs::msg::NavRELPOSNED9>::SharedPtr navrelposned_sub_;
   rclcpp::Subscription<std_msgs::msg::UInt8>::SharedPtr drive_direction_sub_;
+  rclcpp::Subscription<std_msgs::msg::UInt8>::SharedPtr path_number_sub_;
 
-  std::uint8_t latest_drive_direction_{0};
   bool have_drive_direction_{false};
 
   bool have_heading_{false};
@@ -155,6 +174,21 @@ private:
       socket_fd_ = -1;
       throw std::runtime_error("fcntl(F_SETFL, O_NONBLOCK) failed");
     }
+  }
+  
+  double distance_from_home_m(double lat_rad, double lon_rad) const
+  {
+	  constexpr double earth_radius_m = 6378137.0;
+
+	  const double d_lat = lat_rad - home_lat_rad_;
+	  const double d_lon = lon_rad - home_lon_rad_;
+
+	  const double mean_lat = 0.5 * (lat_rad + home_lat_rad_);
+
+	  const double north_m = d_lat * earth_radius_m;
+	  const double east_m = d_lon * earth_radius_m * std::cos(mean_lat);
+
+	  return std::sqrt(north_m * north_m + east_m * east_m);
   }
 
   bool send_can_frame(std::uint32_t can_id, const sprayer_can::CanData & data)
@@ -235,38 +269,73 @@ private:
     have_drive_direction_ = true;
   }
 
+	void path_number_callback(const std_msgs::msg::UInt8::SharedPtr msg)
+	{
+	  if (msg->data > 3) {
+		RCLCPP_WARN(
+		  this->get_logger(),
+		  "Path number %u too large for packed byte. Clamping to 3.",
+		  static_cast<unsigned int>(msg->data));
+
+		latest_path_number_ = 3;
+		return;
+	  }
+
+	  latest_path_number_ = msg->data;
+	}
+
   void navpvt_callback(const ublox_msgs::msg::NavPVT::SharedPtr msg)
-{
-  if (!have_heading_) {
-    return;
+  {
+	  if (!have_heading_) {
+		RCLCPP_WARN_THROTTLE(
+		  this->get_logger(),
+		  *this->get_clock(),
+		  2000,
+		  "No valid moving-base heading yet; not sending GPS CAN packet.");
+		return;
+	  }
+
+	  const double lat_rad =
+		static_cast<double>(msg->lat) * 1e-7 * M_PI / 180.0;
+
+	  const double lon_rad =
+		static_cast<double>(msg->lon) * 1e-7 * M_PI / 180.0;
+
+	  if (!have_home_) {
+		home_lat_rad_ = lat_rad;
+		home_lon_rad_ = lon_rad;
+		have_home_ = true;
+
+		RCLCPP_INFO(
+		  this->get_logger(),
+		  "Home position set from first valid NavPVT: lat=%.9f lon=%.9f",
+		  static_cast<double>(msg->lat) * 1e-7,
+		  static_cast<double>(msg->lon) * 1e-7);
+	  }
+
+	  const double distance_m = distance_from_home_m(lat_rad, lon_rad);
+
+	  const bool home_reached = distance_m <= home_radius_m_;
+
+	  sprayer_can::GpsMotionPacket gps;
+
+	  gps.path_number = latest_path_number_;
+	  gps.home_position = home_reached ? 1 : 0;
+	  gps.direction = latest_drive_direction_;
+	  gps.distance_cm = static_cast<std::uint64_t>(std::llround(distance_m * 100.0));
+
+	  const auto data = sprayer_can::build_gps_motion_data(gps);
+	  send_can_frame(sprayer_can::ID_HOST_GPS_MOTION, data);
+
+	  RCLCPP_INFO_THROTTLE(
+		this->get_logger(),
+		*this->get_clock(),
+		1000,
+		"GPS 0x104: path=%u home=%u dir=%u dist=%.2f m",
+		static_cast<unsigned int>(gps.path_number),
+		static_cast<unsigned int>(gps.direction),
+		distance_m);
   }
-
-  sprayer_can::GpsMotionPacket gps;
-
-  gps.gps_itow_ms = msg->i_tow;
-
-  const std::int32_t g_speed_mmps = msg->g_speed;
-
-  // g_speed: mm/s -> cm/s
-  gps.speed_cmps =
-    sprayer_can::clamp_u8(std::abs(g_speed_mmps) / 10);
-
-  // Do NOT trust NavPVT alone for reverse.
-  // Use latest drive direction if available.
-  if (gps.speed_cmps == 0) {
-    gps.direction = 0;  // stop
-  } else if (have_drive_direction_) {
-    gps.direction = latest_drive_direction_;
-  } else {
-    gps.direction = 1;  // fallback forward
-  }
-
-  // From NavRELPOSNED9 callback
-  gps.heading_cdeg = latest_heading_cdeg_;
-
-  const auto data = sprayer_can::build_gps_motion_data(gps);
-  send_can_frame(sprayer_can::ID_HOST_GPS_MOTION, data);
-}
 
   void print_tx_frame(std::uint32_t can_id, const sprayer_can::CanData & data)
   {
