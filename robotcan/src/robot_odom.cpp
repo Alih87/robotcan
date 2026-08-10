@@ -56,7 +56,7 @@ public:
     // -----------------------------
     // Publisher / Subscribers
     // -----------------------------
-    odom_pub_ = this->create_publisher<nav_msgs::msg::Odometry>("/odom", 10);
+    odom_pub_ = this->create_publisher<nav_msgs::msg::Odometry>("/irrigation/odom", 10);
 
     twist_sub_ = this->create_subscription<geometry_msgs::msg::Twist>(
       "/cmd_vel_feedback",

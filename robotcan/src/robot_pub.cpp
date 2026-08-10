@@ -30,7 +30,7 @@ public:
   {
     this->declare_parameter<std::string>("can_port", "can0");
     this->declare_parameter<double>("publish_rate_hz", 20.0);
-    this->declare_parameter<double>("wheel_base_m", 0.8);
+    this->declare_parameter<double>("wheel_base_m", 2);
 
     can_port_ = this->get_parameter("can_port").as_string();
     publish_rate_hz_ = this->get_parameter("publish_rate_hz").as_double();

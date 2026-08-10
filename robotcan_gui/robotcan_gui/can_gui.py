@@ -217,49 +217,209 @@ class RobotCanGui(QWidget):
     def show_result(self, success, message):
         status = 'OK' if success else 'FAILED'
         self.log(f'[{status}] {message}')
+        
+    def speed_to_text(self, speed):
+	    mapping = {
+			0: "Stop",
+			1: "Low",
+			2: "Middle",
+			3: "High",
+		}
+		return mapping.get(speed, "Unknown")
+
+
+    def direction_to_text(self, direction):
+		mapping = {
+			"F": "Forward",
+			"R": "Reverse",
+			"S": "Stop",
+		}
+		return mapping.get(direction, "Unknown")
+
+
+    def mode_to_text(self, mode):
+		mapping = {
+			"D": "Driving",
+			"W": "Work",
+		}
+		return mapping.get(mode, "Unknown")
+
+
+    def build_drive_flags_text(
+		self,
+		arm_left_open=False,
+		arm_left_close=False,
+		arm_right_open=False,
+		arm_right_close=False,
+		water_main_open=False,
+		water_main_close=False,
+		emergency_stop=False,
+	):
+		flags = []
+
+		if arm_left_open:
+			flags.append("arm_left_open")
+		if arm_left_close:
+			flags.append("arm_left_close")
+		if arm_right_open:
+			flags.append("arm_right_open")
+		if arm_right_close:
+			flags.append("arm_right_close")
+		if water_main_open:
+			flags.append("water_main_open")
+		if water_main_close:
+			flags.append("water_main_close")
+		if emergency_stop:
+			flags.append("emergency_stop")
+
+		if not flags:
+			return "none"
+
+		return ", ".join(flags)
+
+
+    def decode_drive_command_text(
+		self,
+		mode,
+		direction,
+		speed,
+		steering_angle_deg,
+		arm_left_open=False,
+		arm_left_close=False,
+		arm_right_open=False,
+		arm_right_close=False,
+		water_main_open=False,
+		water_main_close=False,
+		emergency_stop=False,
+	):
+		return (
+			"Decoded Drive Command\n"
+			f"  CAN ID: 0x101\n"
+			f"  Mode: {mode} ({self.mode_to_text(mode)})\n"
+			f"  Direction: {direction} ({self.direction_to_text(direction)})\n"
+			f"  Speed: {speed} ({self.speed_to_text(speed)})\n"
+			f"  Steering angle: {steering_angle_deg} deg\n"
+			f"  Flags: {self.build_drive_flags_text(arm_left_open, arm_left_close, arm_right_open, arm_right_close, water_main_open, water_main_close, emergency_stop)}"
+		)
+
+
+    def decode_valve_command_text(self, valves_on, valves_off, clear_previous_state):
+		valve_mask = 0
+
+		if not clear_previous_state:
+			# GUI does not know the node's internal previous mask.
+			# This is only the mask contribution from this GUI command.
+			pass
+
+		for valve in valves_on:
+			if 1 <= valve <= 32:
+				valve_mask |= 1 << (valve - 1)
+
+		for valve in valves_off:
+			if 1 <= valve <= 32:
+				valve_mask &= ~(1 << (valve - 1))
+
+		return (
+			"Decoded Valve Command\n"
+			f"  CAN ID: 0x102\n"
+			f"  Valves ON: {valves_on if valves_on else 'none'}\n"
+			f"  Valves OFF: {valves_off if valves_off else 'none'}\n"
+			f"  Clear previous state: {clear_previous_state}\n"
+			f"  Command mask from GUI input: 0x{valve_mask:08X}"
+		)
+
+
+    def decode_duty_command_text(self, duty_groups):
+		lines = [
+			"Decoded Duty Command",
+			"  CAN ID: 0x103",
+		]
+
+		for i, duty in enumerate(duty_groups):
+			first_valve = i * 4 + 1
+			last_valve = first_valve + 3
+			lines.append(
+				f"  Group {i + 1}, valves {first_valve}-{last_valve}: duty {duty}"
+			)
+
+		return "\n".join(lines)
 
     def send_drive_command(self):
-        success, message = self.ros_node.call_drive_cmd(
-            mode=self.mode_box.currentText(),
-            direction=self.direction_box.currentText(),
-            speed=self.speed_box.value(),
-            steering_angle_deg=self.steering_box.value(),
-            water_main_open=self.water_main_open_check.isChecked(),
-            water_main_close=self.water_main_close_check.isChecked(),
-            emergency_stop=self.emergency_stop_check.isChecked(),
-        )
+		mode = self.mode_box.currentText()
+		direction = self.direction_box.currentText()
+		speed = self.speed_box.value()
+		steering_angle_deg = self.steering_box.value()
 
-        self.show_result(success, message)
+		water_main_open = self.water_main_open_check.isChecked()
+		water_main_close = self.water_main_close_check.isChecked()
+		emergency_stop = self.emergency_stop_check.isChecked()
+
+		self.log(
+			self.decode_drive_command_text(
+				mode=mode,
+				direction=direction,
+				speed=speed,
+				steering_angle_deg=steering_angle_deg,
+				water_main_open=water_main_open,
+				water_main_close=water_main_close,
+				emergency_stop=emergency_stop,
+			)
+		)
+
+		success, message = self.ros_node.call_drive_cmd(
+			mode=mode,
+			direction=direction,
+			speed=speed,
+			steering_angle_deg=steering_angle_deg,
+			water_main_open=water_main_open,
+			water_main_close=water_main_close,
+			emergency_stop=emergency_stop,
+		)
+
+		self.show_result(success, message)
 
     def send_valve_command(self):
-        try:
-            valves_on = self.parse_int_list(self.valves_on_edit.text())
-            valves_off = self.parse_int_list(self.valves_off_edit.text())
-        except ValueError:
-            QMessageBox.warning(self, 'Input Error', 'Valve numbers must be integers.')
-            return
+		try:
+			valves_on = self.parse_int_list(self.valves_on_edit.text())
+			valves_off = self.parse_int_list(self.valves_off_edit.text())
+		except ValueError:
+			QMessageBox.warning(self, 'Input Error', 'Valve numbers must be integers.')
+			return
 
-        success, message = self.ros_node.call_valve_cmd(
-            valves_on=valves_on,
-            valves_off=valves_off,
-            clear_previous_state=self.clear_previous_check.isChecked(),
-        )
+		clear_previous_state = self.clear_previous_check.isChecked()
 
-        self.show_result(success, message)
+		self.log(
+			self.decode_valve_command_text(
+				valves_on=valves_on,
+				valves_off=valves_off,
+				clear_previous_state=clear_previous_state,
+			)
+		)
+
+		success, message = self.ros_node.call_valve_cmd(
+			valves_on=valves_on,
+			valves_off=valves_off,
+			clear_previous_state=clear_previous_state,
+		)
+
+		self.show_result(success, message)
 
     def send_duty_command(self):
-        try:
-            duty_groups = self.parse_int_list(self.duty_edit.text())
-        except ValueError:
-            QMessageBox.warning(self, 'Input Error', 'Duty values must be integers.')
-            return
+		try:
+			duty_groups = self.parse_int_list(self.duty_edit.text())
+		except ValueError:
+			QMessageBox.warning(self, 'Input Error', 'Duty values must be integers.')
+			return
 
-        if len(duty_groups) != 8:
-            QMessageBox.warning(self, 'Input Error', 'Please enter exactly 8 duty values.')
-            return
+		if len(duty_groups) != 8:
+			QMessageBox.warning(self, 'Input Error', 'Please enter exactly 8 duty values.')
+			return
 
-        success, message = self.ros_node.call_duty_cmd(duty_groups)
-        self.show_result(success, message)
+		self.log(self.decode_duty_command_text(duty_groups))
+
+		success, message = self.ros_node.call_duty_cmd(duty_groups)
+		self.show_result(success, message)all_duty_cmd(duty_groups)
+			self.show_result(success, message)
 
 
 def main(args=None):

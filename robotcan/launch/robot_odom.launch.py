@@ -40,10 +40,18 @@ def generate_launch_description():
             name="gps_can_tx_node",
             output="screen",
             )
+            
+    dual_gps_heading_node = Node(
+            package="robotcan",
+            executable="dual_gnss_heading_pub",
+            name="dual_gnss_heading_node",
+            output="screen",
+            )
 
     return LaunchDescription([
         robot_pub_node,
         robot_odom_node,
         ublox_gps_node,
-        robot_gps_can_node
+        robot_gps_can_node,
+        dual_gps_heading_node
     ])
