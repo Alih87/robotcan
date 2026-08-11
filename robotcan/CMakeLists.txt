@@ -38,7 +38,7 @@ add_executable(gps_can_tx src/gps_can_tx.cpp)
 ament_target_dependencies(gps_can_tx rclcpp std_msgs ublox_msgs)
 
 add_executable(dual_gnss_heading_pub src/dual_gnss_heading_pub.cpp)
-ament_target_dependencies(dual_gnss_heading_pub rclcpp ublox_msgs std_msgs geometry_msgs)
+ament_target_dependencies(dual_gnss_heading_pub rclcpp ublox_msgs std_msgs geometry_msgs sensor_msgs)
 
 target_link_libraries(robot_can)
 target_link_libraries(robot_uart)

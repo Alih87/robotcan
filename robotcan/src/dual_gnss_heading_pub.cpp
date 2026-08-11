@@ -8,7 +8,7 @@
 
 #include "geometry_msgs/msg/vector3_stamped.hpp"
 #include "std_msgs/msg/float64.hpp"
-
+#include "sensor_msgs/msg/imu.hpp"
 #include "ublox_msgs/msg/nav_relposned9.hpp"
 
 class DualGnssHeadingPublisher : public rclcpp::Node
@@ -44,6 +44,11 @@ public:
       this->create_publisher<geometry_msgs::msg::Vector3Stamped>(
         "/dual_gnss/baseline_enu",
         10);
+        
+    imu_enu_pub_ =
+      this->create_publisher<sensor_msgs::msg::Imu>(
+        "/dual_gnss/imu",
+        10);
 
     navrelposned_sub_ =
       this->create_subscription<ublox_msgs::msg::NavRELPOSNED9>(
@@ -70,6 +75,7 @@ private:
   rclcpp::Publisher<std_msgs::msg::Float64>::SharedPtr heading_enu_pub_;
   rclcpp::Publisher<std_msgs::msg::Float64>::SharedPtr heading_compass_pub_;
   rclcpp::Publisher<geometry_msgs::msg::Vector3Stamped>::SharedPtr baseline_enu_pub_;
+  rclcpp::Publisher<sensor_msgs::msg::Imu>::SharedPtr imu_enu_pub_;
 
   void navrelposned_callback(
     const ublox_msgs::msg::NavRELPOSNED9::SharedPtr msg)
@@ -169,6 +175,19 @@ private:
     std_msgs::msg::Float64 heading_compass_msg;
     heading_compass_msg.data = heading_compass_deg;
     heading_compass_pub_->publish(heading_compass_msg);
+    
+    geometry_msgs::msg::Quaternion quat_msg;
+    quat_msg.w = std::cos(heading_enu_rad / 2.0);
+    quat_msg.x = 0.0;
+    quat_msg.y = 0.0;
+    quat_msg.z = std::sin(heading_enu_rad / 2.0);
+    
+    sensor_msgs::msg::Imu imu_enu_msg;
+    imu_enu_msg.header.stamp = baseline_msg.header.stamp;
+    imu_enu_msg.header.frame_id = "base_link";
+    imu_enu_msg.orientation = quat_msg;
+    imu_enu_pub_->publish(imu_enu_msg);
+    
 
     RCLCPP_INFO_THROTTLE(
       this->get_logger(),
