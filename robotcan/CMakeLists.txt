@@ -15,6 +15,7 @@ find_package(nav_msgs REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package(ublox_msgs REQUIRED)
 find_package(std_msgs REQUIRED)
+find_package(tf2_ros REQUIRED)
 # uncomment the following section in order to fill in
 # further dependencies manually.
 # find_package(<dependency> REQUIRED)
@@ -32,13 +33,13 @@ add_executable(robot_pub src/robot_pub.cpp)
 ament_target_dependencies(robot_pub rclcpp robotcan_interfaces geometry_msgs)
 
 add_executable(robot_odom src/robot_odom.cpp)
-ament_target_dependencies(robot_odom rclcpp geometry_msgs nav_msgs sensor_msgs)
+ament_target_dependencies(robot_odom rclcpp geometry_msgs nav_msgs sensor_msgs tf2_ros)
 
 add_executable(gps_can_tx src/gps_can_tx.cpp)
 ament_target_dependencies(gps_can_tx rclcpp std_msgs ublox_msgs)
 
 add_executable(dual_gnss_heading_pub src/dual_gnss_heading_pub.cpp)
-ament_target_dependencies(dual_gnss_heading_pub rclcpp ublox_msgs std_msgs geometry_msgs sensor_msgs)
+ament_target_dependencies(dual_gnss_heading_pub rclcpp ublox_msgs std_msgs geometry_msgs sensor_msgs nav_msgs)
 
 target_link_libraries(robot_can)
 target_link_libraries(robot_uart)
