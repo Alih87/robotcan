@@ -15,11 +15,21 @@ from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
 from ament_index_python.packages import get_package_share_directory
 
+ROBOTCAN_GPS_PARAMS = os.path.join(get_package_share_directory("robotcan"), "params", "zed_f9p.yaml")
+
 def generate_launch_description():
     can_port_arg = DeclareLaunchArgument(
         "can_port",
         default_value="can0",
         description="CAN interface name: vcan0 for testing, can0 for real CAN"
+    )
+    
+    ublox_gps_node = Node(
+        package="ublox_gps",
+        executable="ublox_gps_node",
+        name="robot_gps_node",
+        output="screen",
+        parameters=[ROBOTCAN_GPS_PARAMS]
     )
     
     robot_odom_launch = IncludeLaunchDescription(
@@ -51,6 +61,7 @@ def generate_launch_description():
 
     return LaunchDescription([
         can_port_arg,
+        ublox_gps_node,
         robot_odom_launch,
         robotcan_srv_node,
         robotcan_gui_node,
