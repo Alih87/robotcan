@@ -345,11 +345,39 @@ private:
 	  const double error_north_m =
 		target_north_m_ - current_north_m;
 
-	  const double target_bearing_rad =
+	  /*
+		path_bearing_rad is the direction of travel from current position
+		toward the target.
+
+		ENU convention:
+		  0 rad    = East
+		  +pi / 2 = North
+	  */
+	  const double path_bearing_rad =
 		std::atan2(error_north_m, error_east_m);
 
+	  double desired_heading_rad =
+		path_bearing_rad;
+
+	  /*
+		For reverse movement, the robot should not try to turn around.
+
+		Example:
+		  Robot faces East.
+		  Target is 10 m behind.
+		  Travel direction is West.
+		  But robot heading should stay East while reversing.
+
+		Therefore:
+		  desired heading = travel bearing + 180 degrees
+	  */
+	  if (move_direction() == "R") {
+		desired_heading_rad =
+		  normalize_angle_rad(path_bearing_rad + kPi);
+	  }
+
 	  const double heading_error_rad =
-		normalize_angle_rad(target_bearing_rad - heading_enu_rad_);
+		normalize_angle_rad(desired_heading_rad - heading_enu_rad_);
 
 	  const double heading_error_deg =
 		rad_to_deg(heading_error_rad);
@@ -358,9 +386,15 @@ private:
 		return 0;
 	  }
 
+	  /*
+		Your vehicle steering polarity is reversed, so first flip the sign.
+	  */
 	  double steering_deg =
 		-steering_kp_ * heading_error_deg;
 
+	  /*
+		When driving backward, steering effect reverses again.
+	  */
 	  if (move_direction() == "R") {
 		steering_deg *= -1.0;
 	  }

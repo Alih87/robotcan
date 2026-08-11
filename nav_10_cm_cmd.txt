@@ -5,6 +5,24 @@ ros2 run robotcan gps_10_move --ros-args -p navpvt_topic:=/robot_gps_node/navpvt
 
 
 
+ros2 run robotcan gps_waypoint_follower --ros-args \
+  -p navpvt_topic:=/rover/navpvt \
+  -p heading_topic:=/dual_gnss/heading_enu_rad \
+  -p drive_service:=/send_drive_cmd \
+  -p waypoint_file:=/ws/isaac_ros-dev/gps_waypoints.csv \
+  -p log_file:=/ws/isaac_ros-dev/field_test_logs/gps_waypoint_log.csv \
+  -p drive_mode:=W \
+  -p drive_direction:=F \
+  -p speed:=1 \
+  -p waypoint_radius_m:=0.8 \
+  -p steering_kp:=0.8 \
+  -p max_steering_deg:=10.0 \
+  -p heading_deadband_deg:=3.0
+
+
+
+
+
 
 
 [INFO] [1786443923.723566326] [gps_10m_move_node]: Move: travelled=1.87 m, remaining=8.14 m, direction=F, steering=0 deg
