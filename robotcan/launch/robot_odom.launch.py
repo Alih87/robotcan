@@ -40,9 +40,8 @@ def generate_launch_description():
             )
 
     return LaunchDescription([
+        robot_gps_can_node,
         robot_pub_node,
         robot_odom_node,
-        ublox_gps_node,
-        robot_gps_can_node,
         dual_gps_heading_node
     ])
