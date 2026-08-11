@@ -41,6 +41,9 @@ ament_target_dependencies(gps_can_tx rclcpp std_msgs ublox_msgs)
 add_executable(dual_gnss_heading_pub src/dual_gnss_heading_pub.cpp)
 ament_target_dependencies(dual_gnss_heading_pub rclcpp ublox_msgs std_msgs geometry_msgs sensor_msgs nav_msgs)
 
+add_executable(gps_10_move src/gps_10_move.cpp)
+ament_target_dependencies(gps_10_move rclcpp ublox_msgs std_msgs geometry_msgs sensor_msgs nav_msgs robotcan_interfaces)
+
 target_link_libraries(robot_can)
 target_link_libraries(robot_uart)
 target_link_libraries(robot_srv)
@@ -48,6 +51,7 @@ target_link_libraries(robot_pub)
 target_link_libraries(robot_odom)
 target_link_libraries(gps_can_tx)
 target_link_libraries(dual_gnss_heading_pub)
+target_link_libraries(gps_10_move)
 
 target_include_directories(gps_can_tx PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
@@ -80,6 +84,10 @@ install(TARGETS
 )
 install(TARGETS
   dual_gnss_heading_pub
+  DESTINATION lib/${PROJECT_NAME}
+)
+install(TARGETS
+  gps_10_move
   DESTINATION lib/${PROJECT_NAME}
 )
 install(DIRECTORY
