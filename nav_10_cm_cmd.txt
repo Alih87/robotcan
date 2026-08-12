@@ -35,6 +35,23 @@ ros2 run robotcan gps_waypoint_follower_v2 --ros-args \
   -p steering_kp:=0.8 \
   -p max_steering_deg:=10.0 \
   -p heading_deadband_deg:=3.0
+  
+  
+ ros2 run robotcan gps_waypoint_follower_v2 --ros-args \
+  -p navpvt_topic:=/robot_gps_node/navpvt \
+  -p heading_topic:=/dual_gnss/heading_enu_rad \
+  -p drive_service:=/send_drive_cmd \
+  -p waypoint_file:=/ws/isaac_ros-dev/gps_waypoints_back.csv \
+  -p log_file:=/ws/isaac_ros-dev/field_test_logs/gps_waypoint_log_t1_back.csv \
+  -p drive_mode:=W \
+  -p drive_direction:=R \
+  -p speed:=1 \
+  -p waypoint_radius_m:=0.8 \
+  -p steering_kp:=0.8 \
+  -p max_steering_deg:=10.0 \
+  -p heading_deadband_deg:=3.0
+
+
 
 
 
