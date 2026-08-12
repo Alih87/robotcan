@@ -10,8 +10,8 @@ FORWARD_WAYPOINT_FILE="/ws/isaac_ros-dev/gps_waypoints.csv"
 BACK_WAYPOINT_FILE="/ws/isaac_ros-dev/gps_waypoints_back.csv"
 
 LOG_DIR="/ws/isaac_ros-dev/field_test_logs"
-FORWARD_LOG="/ws/isaac_ros-dev/field_test_logs/gps_waypoint_log_forward_field.csv"
-BACK_LOG="/ws/isaac_ros-dev/field_test_logs/gps_waypoint_log_back_field.csv"
+FORWARD_LOG="/ws/isaac_ros-dev/field_test_logs/gps_waypoint_log_forward_field_2.csv"
+BACK_LOG="/ws/isaac_ros-dev/field_test_logs/gps_waypoint_log_back_field_2.csv"
 
 FORWARD_TARGET_LAT="35.829614400"
 FORWARD_TARGET_LON="126.686568622"
@@ -79,10 +79,11 @@ ros2 run robotcan gps_waypoint_follower_v2 --ros-args \
   -p drive_mode:=W \
   -p drive_direction:=F \
   -p speed:=1 \
-  -p waypoint_radius_m:=0.8 \
-  -p steering_kp:=0.4 \
-  -p max_steering_deg:=4.0 \
-  -p heading_deadband_deg:=4.0 &
+  -p waypoint_radius_m:=7.0 \
+  -p steering_kp:=0.25 \
+  -p max_steering_deg:=3.0 \
+  -p heading_deadband_deg:=5.0 \
+  -p final_straight_radius_m:=8.0 &
 
 FORWARD_NODE_PID=$!
 
@@ -125,9 +126,10 @@ ros2 run robotcan gps_waypoint_follower_v2 --ros-args \
   -p drive_direction:=R \
   -p speed:=1 \
   -p waypoint_radius_m:=0.8 \
-  -p steering_kp:=0.25 \
-  -p max_steering_deg:=4.0 \
-  -p heading_deadband_deg:=5.0 &
+  -p steering_kp:=0.20 \
+  -p max_steering_deg:=3.0 \
+  -p heading_deadband_deg:=6.0 \
+  -p final_straight_radius_m:=5.0 &
 
 BACK_NODE_PID=$!
 

@@ -62,6 +62,7 @@ public:
 
     this->declare_parameter<int>("stop_repeat_count_at_waypoint", 5);
     this->declare_parameter<int>("shutdown_stop_repeat_count", 10);
+    this->declare_parameter<double>("final_straight_radius_m", 0.0);
 
     navpvt_topic_ =
       this->get_parameter("navpvt_topic").as_string();
@@ -110,6 +111,9 @@ public:
 
     shutdown_stop_repeat_count_ =
       this->get_parameter("shutdown_stop_repeat_count").as_int();
+      
+    final_straight_radius_m_ =
+	  this->get_parameter("final_straight_radius_m").as_double();
 
     validate_parameters();
 
@@ -194,6 +198,7 @@ private:
 
   int stop_repeat_count_at_waypoint_{5};
   int shutdown_stop_repeat_count_{10};
+  double final_straight_radius_m_{0.0};
 
   rclcpp::Subscription<ublox_msgs::msg::NavPVT>::SharedPtr navpvt_sub_;
   rclcpp::Subscription<std_msgs::msg::Float64>::SharedPtr heading_sub_;
@@ -274,6 +279,9 @@ private:
     if (shutdown_stop_repeat_count_ < 1) {
       throw std::runtime_error("shutdown_stop_repeat_count must be >= 1");
     }
+    if (final_straight_radius_m_ < 0.0) {
+	  throw std::runtime_error("final_straight_radius_m must be >= 0");
+	}
   }
 
   double deg_to_rad(double deg) const
@@ -791,8 +799,14 @@ private:
     const double heading_error_deg =
       heading_error_to_waypoint_deg(wp);
 
-    const int steering_angle_deg =
-      calculate_steering_angle_deg(wp);
+    int steering_angle_deg = 0;
+
+	if (final_straight_radius_m_ <= 0.0 ||
+		absolute_error_m > final_straight_radius_m_)
+	{
+	  steering_angle_deg =
+		calculate_steering_angle_deg(wp);
+	}
 
     if (absolute_error_m <= waypoint_radius_m_) {
       handle_waypoint_reached(
