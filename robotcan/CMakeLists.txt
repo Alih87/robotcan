@@ -47,6 +47,9 @@ ament_target_dependencies(gps_10_move rclcpp ublox_msgs std_msgs geometry_msgs s
 add_executable(gps_waypoint_follower src/gps_waypoint_follower.cpp)
 ament_target_dependencies(gps_waypoint_follower rclcpp std_msgs ublox_msgs robotcan_interfaces)
 
+add_executable(gps_waypoint_follower_v2 src/gps_waypoint_follower_v2.cpp)
+ament_target_dependencies(gps_waypoint_follower_v2 rclcpp std_msgs ublox_msgs robotcan_interfaces)
+
 target_link_libraries(robot_can)
 target_link_libraries(robot_uart)
 target_link_libraries(robot_srv)
@@ -56,6 +59,7 @@ target_link_libraries(gps_can_tx)
 target_link_libraries(dual_gnss_heading_pub)
 target_link_libraries(gps_10_move)
 target_link_libraries(gps_waypoint_follower)
+target_link_libraries(gps_waypoint_follower_v2)
 
 target_include_directories(gps_can_tx PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
@@ -96,6 +100,10 @@ install(TARGETS
 )
 install(TARGETS
   gps_waypoint_follower
+  DESTINATION lib/${PROJECT_NAME}
+)
+install(TARGETS
+  gps_waypoint_follower_v2
   DESTINATION lib/${PROJECT_NAME}
 )
 install(DIRECTORY
